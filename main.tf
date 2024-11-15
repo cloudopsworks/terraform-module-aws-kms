@@ -5,7 +5,7 @@
 #
 
 locals {
-  key_alias = var.config.prefix != "" ? format("%s/%s", var.config.prefix, local.system_name) : format("kmskey/%s", local.system_name)
+  key_alias = var.prefix != "" ? format("%s/%s", var.prefix, local.system_name) : format("kmskey/%s", local.system_name)
 }
 
 module "this" {
