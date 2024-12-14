@@ -23,6 +23,7 @@ module "this" {
   grants                            = try(var.config.grants, {})
   enable_key_rotation               = try(var.config.rotation.enabled, false)
   rotation_period_in_days           = try(var.config.rotation.period, 90)
+  key_statements                    = try(var.config.statements, {})
   tags                              = local.all_tags
 }
 
