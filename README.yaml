@@ -1,4 +1,4 @@
-name: Terraform Transit Gateway Module
+name: Terraform AWS KMS Key Management Module
 #logo: logo/logo.jpg
 
 license: "APACHE2"
@@ -8,10 +8,29 @@ copyrights:
     url: "https://cloudops.works"
     year: "2024"
 
-github_repo: cloudopsworks/terraform-module-aws-vpc-setup
+github_repo: cloudopsworks/terraform-module-aws-kms
 
 description: |-
-  VPC Module for setting up transit gateway with ResourceAccessMananger support.
+  This Terraform module manages AWS KMS (Key Management Service) keys. It provides a flexible way to 
+  create and manage KMS keys with various configurations and policies. The module supports key rotation, 
+  alias management, and detailed IAM policies for key administrators, users, and service roles.
+
+  ## Features
+  - **KMS Key Creation**: Creates a KMS key with configurable description, usage, and deletion window.
+  - **Alias Management**: Supports custom aliases for the KMS key.
+  - **Key Rotation**: Enables key rotation with a configurable rotation period.
+  - **IAM Policies**: Manages IAM policies for key administrators, users, and service roles.
+  - **Grants Management**: Supports custom grants for the KMS key.
+  - **Tagging**: Allows tagging of the KMS key for better resource management.
+
+  ## Inputs
+  - **prefix**: The prefix to use for the KMS key alias.
+  - **config**: A YAML configuration for the KMS key, including description, key usage, deletion window, aliases, administrators, service roles, users, grants, rotation settings, and statements.
+
+  ## Outputs
+  - **kms_key_id**: The ID of the created KMS key.
+  - **kms_key_arn**: The ARN of the created KMS key.
+  - **kms_key_aliases**: The aliases associated with the KMS key.
 
 # Introduction to the project
 #introduction: |-
