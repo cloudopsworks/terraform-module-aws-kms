@@ -4,6 +4,8 @@
 #            Distributed Under Apache v2.0 License
 #
 
+## The prefix to use for the KMS key alias - if not provided, the default is "kmskey"
+# example: "my-prefix/myOrgUnit-myEnvName-myEnvType-001-uswe2"
 variable "prefix" {
   description = "The prefix to use for the KMS key alias"
   type        = string
