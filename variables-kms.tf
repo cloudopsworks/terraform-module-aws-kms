@@ -1,9 +1,14 @@
 ##
-# (c) 2024 - Cloud Ops Works LLC - https://cloudops.works/
-#            On GitHub: https://github.com/cloudopsworks
-#            Distributed Under Apache v2.0 License
+# (c) 2021-2025
+#     Cloud Ops Works LLC - https://cloudops.works/
+#     Find us on:
+#       GitHub: https://github.com/cloudopsworks
+#       WebSite: https://cloudops.works
+#     Distributed Under Apache v2.0 License
 #
 
+## The prefix to use for the KMS key alias - if not provided, the default is "kmskey"
+# example: "my-prefix/myOrgUnit-myEnvName-myEnvType-001-uswe2"
 variable "prefix" {
   description = "The prefix to use for the KMS key alias"
   type        = string
