@@ -33,17 +33,91 @@ description: |-
   - **kms_key_aliases**: The aliases associated with the KMS key.
 
 # Introduction to the project
-#introduction: |-
-#  This is an introduction.
+introduction: |-
+  The AWS KMS Key Management Module is designed to simplify the creation and management of AWS KMS keys
+  through Terraform. It provides a structured approach to defining key policies, rotations, and access
+  controls using YAML configuration. This module is particularly useful for organizations requiring
+  standardized key management across different environments and applications.
+
+  The module supports various KMS key configurations including custom aliases, key rotation policies,
+  and fine-grained access controls through IAM policies and grants.
 
 # How to use this project
-#usage: |-
+usage: |-
+  To use this module in your Terragrunt configuration:
+
+  ```hcl
+  terraform {
+    source = "git::https://github.com/cloudopsworks/terraform-module-aws-kms.git?ref=v1.0.0"
+  }
+
+  inputs = {
+    prefix = "myorg/department-env-type-001-region"
+    config = {
+      description = "KMS key for application encryption"
+      key_usage = "ENCRYPT_DECRYPT"
+      deletion_window = 30
+      aliases = ["app1-key", "service-key"]
+      key_administrators = ["arn:aws:iam::123456789012:role/admin"]
+      key_users = ["arn:aws:iam::123456789012:role/app-role"]
+      rotation = {
+        enabled = true
+        period = 90
+      }
+    }
+  }
+  ```
 
 # Example usage
-#examples: |-
+examples: |-
+  1. Basic encryption key with rotation:
+  ```yaml
+  prefix: "myorg/app"
+  config:
+    description: "Application encryption key"
+    rotation:
+      enabled: true
+  ```
+
+  2. Multi-service key with custom permissions:
+  ```yaml
+  prefix: "myorg/shared"
+  config:
+    description: "Shared services encryption key"
+    aliases: ["shared-key", "common-key"]
+    key_administrators: ["arn:aws:iam::123456789012:role/key-admin"]
+    key_service_users: [
+      "arn:aws:iam::123456789012:role/service-a",
+      "arn:aws:iam::123456789012:role/service-b"
+    ]
+  ```
 
 # How to get started quickly
-#quickstart: |-
+quickstart: |-
+  1. Add this module to your Terragrunt configuration:
+     ```hcl
+     terraform {
+       source = "git::https://github.com/cloudopsworks/terraform-module-aws-kms.git?ref=v1.0.0"
+     }
+     ```
+
+  2. Create a minimal configuration:
+     ```hcl
+     inputs = {
+       prefix = "myorg/myapp"
+       config = {
+         description = "My first KMS key"
+         key_usage = "ENCRYPT_DECRYPT"
+       }
+     }
+     ```
+
+  3. Initialize and apply:
+     ```bash
+     terragrunt init
+     terragrunt plan
+     terragrunt apply
+     ```
 
 include:
   - "docs/targets.md"
