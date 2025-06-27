@@ -67,10 +67,98 @@ We have [*lots of terraform modules*][terraform_modules] that are Open Source an
 
 
 
+## Introduction
+
+The AWS KMS Key Management Module is designed to simplify the creation and management of AWS KMS keys
+through Terraform. It provides a structured approach to defining key policies, rotations, and access
+controls using YAML configuration. This module is particularly useful for organizations requiring
+standardized key management across different environments and applications.
+
+The module supports various KMS key configurations including custom aliases, key rotation policies,
+and fine-grained access controls through IAM policies and grants.
+
+## Usage
 
 
+**IMPORTANT:** The `master` branch is used in `source` just as an example. In your code, do not pin to `master` because there may be breaking changes between releases.
+Instead pin to the release tag (e.g. `?ref=vX.Y.Z`) of one of our [latest releases](https://github.com/cloudopsworks/terraform-module-aws-kms/releases).
 
 
+To use this module in your Terragrunt configuration:
+
+```hcl
+terraform {
+  source = "git::https://github.com/cloudopsworks/terraform-module-aws-kms.git?ref=v1.0.0"
+}
+
+inputs = {
+  prefix = "myorg/department-env-type-001-region"
+  config = {
+    description = "KMS key for application encryption"
+    key_usage = "ENCRYPT_DECRYPT"
+    deletion_window = 30
+    aliases = ["app1-key", "service-key"]
+    key_administrators = ["arn:aws:iam::123456789012:role/admin"]
+    key_users = ["arn:aws:iam::123456789012:role/app-role"]
+    rotation = {
+      enabled = true
+      period = 90
+    }
+  }
+}
+```
+
+## Quick Start
+
+1. Add this module to your Terragrunt configuration:
+   ```hcl
+   terraform {
+     source = "git::https://github.com/cloudopsworks/terraform-module-aws-kms.git?ref=v1.0.0"
+   }
+   ```
+
+2. Create a minimal configuration:
+   ```hcl
+   inputs = {
+     prefix = "myorg/myapp"
+     config = {
+       description = "My first KMS key"
+       key_usage = "ENCRYPT_DECRYPT"
+     }
+   }
+   ```
+
+3. Initialize and apply:
+   ```bash
+   terragrunt init
+   terragrunt plan
+   terragrunt apply
+   ```
+
+
+## Examples
+
+1. Basic encryption key with rotation:
+```yaml
+prefix: "myorg/app"
+config:
+  description: "Application encryption key"
+  rotation:
+    enabled: true
+```
+
+2. Multi-service key with custom permissions:
+```yaml
+prefix: "myorg/shared"
+config:
+  description: "Shared services encryption key"
+  aliases: ["shared-key", "common-key"]
+  key_administrators: ["arn:aws:iam::123456789012:role/key-admin"]
+  key_service_users: [
+    "arn:aws:iam::123456789012:role/service-a",
+    "arn:aws:iam::123456789012:role/service-b"
+  ]
+```
 
 
 
@@ -90,6 +178,7 @@ Available targets:
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.0 |
 
 ## Providers
 
