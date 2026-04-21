@@ -8,48 +8,57 @@
   -->
 [![README Header][readme_header_img]][readme_header_link]
 
-[![cloudopsworks][logo]](https://cloudops.works/)
+[![cloudopsworks][logo]](https://cloudopsworks.co/)
 
 # Terraform AWS KMS Key Management Module
 
+ [![Latest Release](https://img.shields.io/github/release/cloudopsworks/terraform-module-aws-kms.svg?style=for-the-badge)](https://github.com/cloudopsworks/terraform-module-aws-kms/releases/latest) [![Last Updated](https://img.shields.io/github/last-commit/cloudopsworks/terraform-module-aws-kms.svg?style=for-the-badge)](https://github.com/cloudopsworks/terraform-module-aws-kms/commits)
 
 
-
-This Terraform module manages AWS KMS (Key Management Service) keys. It provides a flexible way to 
-create and manage KMS keys with various configurations and policies. The module supports key rotation, 
-alias management, and detailed IAM policies for key administrators, users, and service roles.
+This Terraform module manages AWS KMS (Key Management Service) keys using the
+[terraform-aws-modules/kms/aws](https://registry.terraform.io/modules/terraform-aws-modules/kms/aws/latest)
+upstream module. It provides a structured, YAML-driven way to create and manage
+KMS keys with configurable policies, rotation, aliases, and IAM access controls.
 
 ## Features
-- **KMS Key Creation**: Creates a KMS key with configurable description, usage, and deletion window.
-- **Alias Management**: Supports custom aliases for the KMS key.
-- **Key Rotation**: Enables key rotation with a configurable rotation period.
-- **IAM Policies**: Manages IAM policies for key administrators, users, and service roles.
-- **Grants Management**: Supports custom grants for the KMS key.
-- **Tagging**: Allows tagging of the KMS key for better resource management.
+
+- **KMS Key Creation**: Creates a KMS key with configurable description, usage type, and deletion window.
+- **Alias Management**: Supports auto-generated or custom alias names for the KMS key.
+- **Key Rotation**: Enables automatic key rotation with a configurable rotation period.
+- **IAM Policies**: Manages IAM principals for key administrators, users, service roles, and service users.
+- **Grants Management**: Supports custom KMS grants for fine-grained cryptographic operation delegation.
+- **Custom Policy Statements**: Allows additional IAM key policy statements for advanced use cases.
+- **Tagging**: Merges hierarchy tags (org, region, spoke, env) with local tags for consistent resource labeling.
+- **AWS Provider 6.x**: Updated to support HashiCorp AWS provider `~> 6.35`.
 
 ## Inputs
-- **prefix**: The prefix to use for the KMS key alias.
-- **config**: A YAML configuration for the KMS key, including description, key usage, deletion window, aliases, administrators, service roles, users, grants, rotation settings, and statements.
+
+| Variable   | Required | Description |
+|------------|----------|-------------|
+| `org`      | Yes      | Organization details (name, unit, environment name and type) — injected by Terragrunt hierarchy. |
+| `spoke_def`| No       | 3-digit spoke identifier. Default: `"001"`. |
+| `is_hub`   | No       | Hub/spoke topology flag. Default: `false`. |
+| `prefix`   | No       | Alias path prefix. Default: `"kmskey"`. |
+| `config`   | No       | KMS key configuration object (see usage). Default: `{}`. |
+| `extra_tags`| No      | Additional tags merged into the resource — supplied by Terragrunt hierarchy. |
 
 ## Outputs
-- **kms_key_id**: The ID of the created KMS key.
-- **kms_key_arn**: The ARN of the created KMS key.
-- **kms_key_aliases**: The aliases associated with the KMS key.
+
+| Output             | Description |
+|--------------------|-------------|
+| `kms_key_id`       | Globally unique identifier of the KMS key. |
+| `kms_key_arn`      | ARN of the KMS key. |
+| `kms_key_aliases`  | List of aliases associated with the KMS key. |
 
 
 ---
 
 This project is part of our comprehensive approach towards DevOps Acceleration. 
 [<img align="right" title="Share via Email" width="24" height="24" src="https://docs.cloudops.works/images/ionicons/ios-mail.svg"/>][share_email]
-[<img align="right" title="Share on Google+" width="24" height="24" src="https://docs.cloudops.works/images/ionicons/logo-googleplus.svg" />][share_googleplus]
 [<img align="right" title="Share on Facebook" width="24" height="24" src="https://docs.cloudops.works/images/ionicons/logo-facebook.svg" />][share_facebook]
 [<img align="right" title="Share on Reddit" width="24" height="24" src="https://docs.cloudops.works/images/ionicons/logo-reddit.svg" />][share_reddit]
 [<img align="right" title="Share on LinkedIn" width="24" height="24" src="https://docs.cloudops.works/images/ionicons/logo-linkedin.svg" />][share_linkedin]
-[<img align="right" title="Share on Twitter" width="24" height="24" src="https://docs.cloudops.works/images/ionicons/logo-twitter.svg" />][share_twitter]
-
-
-[![Terraform Open Source Modules](https://docs.cloudops.works/images/terraform-open-source-modules.svg)][terraform_modules]
-
+[<img align="right" title="Share on X" width="24" height="24" src="https://docs.cloudops.works/images/ionicons/logo-twitter.svg" />][share_twitter]
 
 
 It's 100% Open Source and licensed under the [APACHE2](LICENSE).
@@ -70,12 +79,16 @@ We have [*lots of terraform modules*][terraform_modules] that are Open Source an
 ## Introduction
 
 The AWS KMS Key Management Module is designed to simplify the creation and management of AWS KMS keys
-through Terraform. It provides a structured approach to defining key policies, rotations, and access
-controls using YAML configuration. This module is particularly useful for organizations requiring
-standardized key management across different environments and applications.
+through Terraform and Terragrunt. It wraps the upstream `terraform-aws-modules/kms/aws` module with a
+structured, YAML-driven configuration pattern that fits the CloudOps Works spoke/hub deployment
+hierarchy.
 
-The module supports various KMS key configurations including custom aliases, key rotation policies,
-and fine-grained access controls through IAM policies and grants.
+The module auto-generates key aliases using the `system_name` convention
+(`<org_unit>-<env_name>-<env_type>-<spoke>-<region>`), ensuring consistent naming across environments.
+All IAM access controls are grouped under a `policy` sub-object, and key rotation settings are grouped
+under a `rotation` sub-object, keeping the configuration readable and self-documenting.
+
+This module supports AWS Provider 6.x and requires Terraform >= 1.3.
 
 ## Usage
 
@@ -84,51 +97,130 @@ and fine-grained access controls through IAM policies and grants.
 Instead pin to the release tag (e.g. `?ref=vX.Y.Z`) of one of our [latest releases](https://github.com/cloudopsworks/terraform-module-aws-kms/releases).
 
 
-To use this module in your Terragrunt configuration:
+### Bootstrap a new deployment with Terragrunt Scaffold
+
+```sh
+# 1. Create and enter the target deployment directory
+mkdir -p production/us-east-1/spoke001/kms
+cd production/us-east-1/spoke001/kms
+
+# 2. Scaffold the module (creates inputs.yaml, terragrunt.hcl, local-tags.json)
+terragrunt scaffold github.com/cloudopsworks/terraform-module-aws-kms
+
+# 3. Edit inputs.yaml with deployment-specific values
+vi inputs.yaml
+
+# 4. Apply
+terragrunt apply
+```
+
+---
+
+### Generated `inputs.yaml`
+
+After scaffolding, `inputs.yaml` contains all module-specific variables pre-populated with
+comments. Edit the values to match your deployment:
+
+```yaml
+# Module configuration — fill in values and uncomment required entries before running terragrunt apply.
+# Variables supplied automatically by the Terragrunt hierarchy (org, is_hub, spoke_def, extra_tags)
+# are NOT listed here; they are injected at runtime.
+
+# prefix: ""  # (Optional) Prefix for the KMS key alias path. Default: "kmskey/<system_name>"
+#             # Example: "myorg/devops" produces alias "myorg/devops/<system_name>"
+
+# config:     # (Optional) KMS key configuration. Default: {}
+#   description: "KMS key for <purpose>"     # (Optional) Human-readable key description
+#   key_usage: ENCRYPT_DECRYPT               # (Optional) Valid: ENCRYPT_DECRYPT, SIGN_VERIFY, GENERATE_VERIFY_MAC
+#   deletion_window: 30                      # (Optional) Days before deletion (7-30). Default: 30
+#   aliases:                                 # (Optional) Custom alias names for the key
+#     - "alias/my-app-key"
+#   policy:                                  # (Optional) IAM principals granted access
+#     administrators:                        # (Optional) ARNs of key administrators. Default: []
+#       - "arn:aws:iam::123456789012:role/KeyAdminRole"
+#     service_roles_for_autoscaling:         # (Optional) ARNs of autoscaling service roles. Default: []
+#       - "arn:aws:iam::123456789012:role/AutoScalingRole"
+#     users:                                 # (Optional) ARNs of key users. Default: []
+#       - "arn:aws:iam::123456789012:role/AppRole"
+#     service_users:                         # (Optional) ARNs of service users. Default: []
+#       - "arn:aws:iam::123456789012:role/ServiceRole"
+#   grants: {}                               # (Optional) Map of KMS grants. Default: {}
+#   rotation:                                # (Optional) Automatic rotation settings
+#     enabled: false                         # (Optional) Enable rotation. Default: false
+#     period: 90                             # (Optional) Rotation period in days. Default: 90
+#   statements: {}                           # (Optional) Additional IAM key policy statements. Default: {}
+```
+
+---
+
+### Generated `terragrunt.hcl`
+
+Scaffold produces a `terragrunt.hcl` that wires `inputs.yaml` into the module inputs:
 
 ```hcl
+locals {
+  local_vars  = yamldecode(file("./inputs.yaml"))
+  spoke_vars  = yamldecode(file(find_in_parent_folders("spoke-inputs.yaml")))
+  region_vars = yamldecode(file(find_in_parent_folders("region-inputs.yaml")))
+  env_vars    = yamldecode(file(find_in_parent_folders("env-inputs.yaml")))
+  global_vars = yamldecode(file(find_in_parent_folders("global-inputs.yaml")))
+
+  local_tags  = jsondecode(file("./local-tags.json"))
+  spoke_tags  = jsondecode(file(find_in_parent_folders("spoke-tags.json")))
+  region_tags = jsondecode(file(find_in_parent_folders("region-tags.json")))
+  env_tags    = jsondecode(file(find_in_parent_folders("env-tags.json")))
+  global_tags = jsondecode(file(find_in_parent_folders("global-tags.json")))
+
+  tags = merge(
+    local.global_tags,
+    local.env_tags,
+    local.region_tags,
+    local.spoke_tags,
+    local.local_tags
+  )
+}
+
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+
 terraform {
-  source = "git::https://github.com/cloudopsworks/terraform-module-aws-kms.git?ref=v1.0.0"
+  source = "github.com/cloudopsworks/terraform-module-aws-kms?ref=v1.1.0"
 }
 
 inputs = {
-  prefix = "myorg/department-env-type-001-region"
-  config = {
-    description = "KMS key for application encryption"
-    key_usage = "ENCRYPT_DECRYPT"
-    deletion_window = 30
-    aliases = ["app1-key", "service-key"]
-    key_administrators = ["arn:aws:iam::123456789012:role/admin"]
-    key_users = ["arn:aws:iam::123456789012:role/app-role"]
-    rotation = {
-      enabled = true
-      period = 90
-    }
-  }
+  is_hub    = false
+  org       = local.env_vars.org
+  spoke_def = local.spoke_vars.spoke
+  prefix    = try(local.local_vars.prefix, "")
+  config    = try(local.local_vars.config, {})
+  extra_tags = local.tags
 }
 ```
 
 ## Quick Start
 
-1. Add this module to your Terragrunt configuration:
-   ```hcl
-   terraform {
-     source = "git::https://github.com/cloudopsworks/terraform-module-aws-kms.git?ref=v1.0.0"
-   }
+1. Create and enter the target deployment directory:
+   ```bash
+   mkdir -p production/us-east-1/spoke001/kms
+   cd production/us-east-1/spoke001/kms
    ```
 
-2. Create a minimal configuration:
-   ```hcl
-   inputs = {
-     prefix = "myorg/myapp"
-     config = {
-       description = "My first KMS key"
-       key_usage = "ENCRYPT_DECRYPT"
-     }
-   }
+2. Scaffold the module:
+   ```bash
+   terragrunt scaffold github.com/cloudopsworks/terraform-module-aws-kms
    ```
 
-3. Initialize and apply:
+3. Open `inputs.yaml` and configure at minimum a `prefix`:
+   ```yaml
+   prefix: "myorg/myapp"
+   config:
+     description: "My first KMS key"
+     rotation:
+       enabled: true
+   ```
+
+4. Initialize and apply:
    ```bash
    terragrunt init
    terragrunt plan
@@ -138,26 +230,57 @@ inputs = {
 
 ## Examples
 
-1. Basic encryption key with rotation:
+#### 1. Basic encryption key with auto-rotation
+
 ```yaml
+# inputs.yaml
 prefix: "myorg/app"
 config:
   description: "Application encryption key"
+  key_usage: ENCRYPT_DECRYPT
   rotation:
     enabled: true
+    period: 365
 ```
 
-2. Multi-service key with custom permissions:
+#### 2. Signing key with administrators and custom aliases
+
 ```yaml
+# inputs.yaml
+prefix: "myorg/signing"
+config:
+  description: "Document signing key"
+  key_usage: SIGN_VERIFY
+  aliases:
+    - "alias/doc-signing-key"
+  policy:
+    administrators:
+      - "arn:aws:iam::123456789012:role/KeyAdminRole"
+    users:
+      - "arn:aws:iam::123456789012:role/SigningServiceRole"
+```
+
+#### 3. Shared services key with autoscaling support
+
+```yaml
+# inputs.yaml
 prefix: "myorg/shared"
 config:
   description: "Shared services encryption key"
-  aliases: ["shared-key", "common-key"]
-  key_administrators: ["arn:aws:iam::123456789012:role/key-admin"]
-  key_service_users: [
-    "arn:aws:iam::123456789012:role/service-a",
-    "arn:aws:iam::123456789012:role/service-b"
-  ]
+  deletion_window: 14
+  aliases:
+    - "alias/shared-key"
+    - "alias/common-key"
+  policy:
+    administrators:
+      - "arn:aws:iam::123456789012:role/KeyAdminRole"
+    service_roles_for_autoscaling:
+      - "arn:aws:iam::123456789012:role/AutoScalingServiceRole"
+    users:
+      - "arn:aws:iam::123456789012:role/service-a"
+      - "arn:aws:iam::123456789012:role/service-b"
+  rotation:
+    enabled: true
 ```
 
 
@@ -169,6 +292,7 @@ Available targets:
   help                                Help screen
   help/all                            Display help for all targets
   help/short                          This help short screen
+  init/%                              Initialize the project for a specific cloud provider: %S
   lint                                Lint terraform/opentofu code
   tag                                 Tag the current version
 
@@ -178,13 +302,13 @@ Available targets:
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 5.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.35 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | 5.76.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.41.0 |
 
 ## Modules
 
@@ -203,20 +327,20 @@ Available targets:
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_config"></a> [config](#input\_config) | The configuration for the KMS key | `any` | `{}` | no |
-| <a name="input_extra_tags"></a> [extra\_tags](#input\_extra\_tags) | n/a | `map(string)` | `{}` | no |
-| <a name="input_is_hub"></a> [is\_hub](#input\_is\_hub) | Establish this is a HUB or spoke configuration | `bool` | `false` | no |
-| <a name="input_org"></a> [org](#input\_org) | n/a | <pre>object({<br/>    organization_name = string<br/>    organization_unit = string<br/>    environment_type  = string<br/>    environment_name  = string<br/>  })</pre> | n/a | yes |
-| <a name="input_prefix"></a> [prefix](#input\_prefix) | The prefix to use for the KMS key alias | `string` | `""` | no |
-| <a name="input_spoke_def"></a> [spoke\_def](#input\_spoke\_def) | n/a | `string` | `"001"` | no |
+| <a name="input_config"></a> [config](#input\_config) | The configuration for the KMS key, including description, key\_usage, deletion\_window, aliases, policy (administrators, service\_roles\_for\_autoscaling, users, service\_users), grants, rotation, and statements | `any` | `{}` | no |
+| <a name="input_extra_tags"></a> [extra\_tags](#input\_extra\_tags) | Extra tags to add to the resources | `map(string)` | `{}` | no |
+| <a name="input_is_hub"></a> [is\_hub](#input\_is\_hub) | Is this a hub or spoke configuration? | `bool` | `false` | no |
+| <a name="input_org"></a> [org](#input\_org) | Organization details | <pre>object({<br/>    organization_name = string<br/>    organization_unit = string<br/>    environment_type  = string<br/>    environment_name  = string<br/>  })</pre> | n/a | yes |
+| <a name="input_prefix"></a> [prefix](#input\_prefix) | The prefix to use for the KMS key alias. If empty, defaults to 'kmskey/<system\_name>' | `string` | `""` | no |
+| <a name="input_spoke_def"></a> [spoke\_def](#input\_spoke\_def) | Spoke ID Number, must be a 3 digit number | `string` | `"001"` | no |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| <a name="output_kms_key_aliases"></a> [kms\_key\_aliases](#output\_kms\_key\_aliases) | n/a |
-| <a name="output_kms_key_arn"></a> [kms\_key\_arn](#output\_kms\_key\_arn) | n/a |
-| <a name="output_kms_key_id"></a> [kms\_key\_id](#output\_kms\_key\_id) | n/a |
+| <a name="output_kms_key_aliases"></a> [kms\_key\_aliases](#output\_kms\_key\_aliases) | The aliases associated with the KMS key |
+| <a name="output_kms_key_arn"></a> [kms\_key\_arn](#output\_kms\_key\_arn) | The Amazon Resource Name (ARN) of the KMS key |
+| <a name="output_kms_key_id"></a> [kms\_key\_id](#output\_kms\_key\_id) | The globally unique identifier for the KMS key |
 
 
 
@@ -226,10 +350,9 @@ Available targets:
 
 File a GitHub [issue](https://github.com/cloudopsworks/terraform-module-aws-kms/issues), send us an [email][email] or join our [Slack Community][slack].
 
-[![README Commercial Support][readme_commercial_support_img]][readme_commercial_support_link]
 
 ## DevOps Tools
-
+[]()
 ## Slack Community
 
 
@@ -250,7 +373,7 @@ Please use the [issue tracker](https://github.com/cloudopsworks/terraform-module
 
 ## Copyrights
 
-Copyright © 2024-2025 [Cloud Ops Works LLC](https://cloudops.works)
+Copyright © 2021-2026 [Cloud Ops Works LLC](https://cloudops.works)
 
 
 
@@ -307,32 +430,31 @@ This project is maintained by [Cloud Ops Works LLC][website].
 [![README Footer][readme_footer_img]][readme_footer_link]
 [![Beacon][beacon]][website]
 
-  [logo]: https://cloudops.works/logo-300x69.svg
-  [docs]: https://cowk.io/docs?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=docs
-  [website]: https://cowk.io/homepage?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=website
-  [github]: https://cowk.io/github?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=github
-  [jobs]: https://cowk.io/jobs?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=jobs
-  [hire]: https://cowk.io/hire?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=hire
-  [slack]: https://cowk.io/slack?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=slack
-  [linkedin]: https://cowk.io/linkedin?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=linkedin
-  [twitter]: https://cowk.io/twitter?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=twitter
-  [testimonial]: https://cowk.io/leave-testimonial?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=testimonial
-  [office_hours]: https://cloudops.works/office-hours?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=office_hours
-  [newsletter]: https://cowk.io/newsletter?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=newsletter
-  [email]: https://cowk.io/email?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=email
-  [commercial_support]: https://cowk.io/commercial-support?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=commercial_support
-  [we_love_open_source]: https://cowk.io/we-love-open-source?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=we_love_open_source
-  [terraform_modules]: https://cowk.io/terraform-modules?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=terraform_modules
-  [readme_header_img]: https://cloudops.works/readme/header/img
-  [readme_header_link]: https://cloudops.works/readme/header/link?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=readme_header_link
-  [readme_footer_img]: https://cloudops.works/readme/footer/img
-  [readme_footer_link]: https://cloudops.works/readme/footer/link?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=readme_footer_link
-  [readme_commercial_support_img]: https://cloudops.works/readme/commercial-support/img
-  [readme_commercial_support_link]: https://cloudops.works/readme/commercial-support/link?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=readme_commercial_support_link
-  [share_twitter]: https://twitter.com/intent/tweet/?text=Terraform+AWS+KMS+Key+Management+Module&url=https://github.com/cloudopsworks/terraform-module-aws-kms
+  [logo]: https://cloudopsworks.co/images/main-logo.png
+  [docs]: https://cloudopsworks.co/resources?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=docs
+  [website]: https://cloudopsworks.co?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=website
+  [github]: https://cloudopsworks.co/github?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=github
+  [jobs]: https://cloudopsworks.co/jobs?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=jobs
+  [hire]: https://cloudopsworks.co/hire?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=hire
+  [slack]: https://cloudopsworks.co/slack?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=slack
+  [linkedin]: https://cloudopsworks.co/linkedin?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=linkedin
+  [x]: https://cloudopsworks.co/x?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=x
+  [testimonial]: https://cloudopsworks.co/case-studies?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=testimonial
+  [office_hours]: https://cloudopsworks.co/office-hours?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=office_hours
+  [newsletter]: https://cloudopsworks.co/resources?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=newsletter
+  [email]: https://cloudopsworks.co/contact?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=email
+  [commercial_support]: https://cloudopsworks.co/services?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=commercial_support
+  [we_love_open_source]: https://cloudopsworks.co/open-source?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=we_love_open_source
+  [terraform_modules]: https://cloudopsworks.co/open-source?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=terraform_modules
+  [readme_header_img]: https://cloudopsworks.co/images/readme-header.png
+  [readme_header_link]: https://cloudopsworks.co/readme/header/link?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=readme_header_link
+  [readme_footer_img]: https://cloudopsworks.co/images/main-logo-footer.png
+  [readme_footer_link]: https://cloudopsworks.co/readme/footer/link?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=readme_footer_link
+  [readme_commercial_support_img]: https://cloudopsworks.co/readme/commercial-support/img
+  [readme_commercial_support_link]: https://cloudopsworks.co/readme/commercial-support/link?utm_source=github&utm_medium=readme&utm_campaign=cloudopsworks/terraform-module-aws-kms&utm_content=readme_commercial_support_link
+  [share_twitter]: https://x.com/intent/tweet/?text=Terraform+AWS+KMS+Key+Management+Module&url=https://github.com/cloudopsworks/terraform-module-aws-kms
   [share_linkedin]: https://www.linkedin.com/shareArticle?mini=true&title=Terraform+AWS+KMS+Key+Management+Module&url=https://github.com/cloudopsworks/terraform-module-aws-kms
   [share_reddit]: https://reddit.com/submit/?url=https://github.com/cloudopsworks/terraform-module-aws-kms
   [share_facebook]: https://facebook.com/sharer/sharer.php?u=https://github.com/cloudopsworks/terraform-module-aws-kms
-  [share_googleplus]: https://plus.google.com/share?url=https://github.com/cloudopsworks/terraform-module-aws-kms
   [share_email]: mailto:?subject=Terraform+AWS+KMS+Key+Management+Module&body=https://github.com/cloudopsworks/terraform-module-aws-kms
-  [beacon]: https://ga-beacon.cloudops.works/G-7XWMFVFXZT/cloudopsworks/terraform-module-aws-kms?pixel&cs=github&cm=readme&an=terraform-module-aws-kms
+  [beacon]: https://ga-beacon.cloudospworks.co/G-QMZVYYN2VN/cloudopsworks/terraform-module-aws-kms?pixel&cs=github&cm=readme&an=terraform-module-aws-kms
