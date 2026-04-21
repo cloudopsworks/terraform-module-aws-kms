@@ -1,5 +1,5 @@
 ##
-# (c) 2021-2025
+# (c) 2021-2026
 #     Cloud Ops Works LLC - https://cloudops.works/
 #     Find us on:
 #       GitHub: https://github.com/cloudopsworks
@@ -8,13 +8,16 @@
 #
 
 output "kms_key_id" {
-  value = module.this.key_id
+  description = "The globally unique identifier for the KMS key"
+  value       = module.this.key_id
 }
 
 output "kms_key_arn" {
-  value = module.this.key_arn
+  description = "The Amazon Resource Name (ARN) of the KMS key"
+  value       = module.this.key_arn
 }
 
 output "kms_key_aliases" {
-  value = module.this.aliases
+  description = "The aliases associated with the KMS key"
+  value       = module.this.aliases
 }

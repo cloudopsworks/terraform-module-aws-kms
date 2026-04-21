@@ -1,118 +1,254 @@
 name: Terraform AWS KMS Key Management Module
 #logo: logo/logo.jpg
 
+badges:
+  - name: Latest Release
+    image: https://img.shields.io/github/release/cloudopsworks/terraform-module-aws-kms.svg?style=for-the-badge
+    url: https://github.com/cloudopsworks/terraform-module-aws-kms/releases/latest
+  - name: Last Updated
+    image: https://img.shields.io/github/last-commit/cloudopsworks/terraform-module-aws-kms.svg?style=for-the-badge
+    url: https://github.com/cloudopsworks/terraform-module-aws-kms/commits
+
 license: "APACHE2"
 
 copyrights:
   - name: "Cloud Ops Works LLC"
     url: "https://cloudops.works"
-    year: "2024"
+    year: "2021"
 
 github_repo: cloudopsworks/terraform-module-aws-kms
 
 description: |-
-  This Terraform module manages AWS KMS (Key Management Service) keys. It provides a flexible way to 
-  create and manage KMS keys with various configurations and policies. The module supports key rotation, 
-  alias management, and detailed IAM policies for key administrators, users, and service roles.
+  This Terraform module manages AWS KMS (Key Management Service) keys using the
+  [terraform-aws-modules/kms/aws](https://registry.terraform.io/modules/terraform-aws-modules/kms/aws/latest)
+  upstream module. It provides a structured, YAML-driven way to create and manage
+  KMS keys with configurable policies, rotation, aliases, and IAM access controls.
 
   ## Features
-  - **KMS Key Creation**: Creates a KMS key with configurable description, usage, and deletion window.
-  - **Alias Management**: Supports custom aliases for the KMS key.
-  - **Key Rotation**: Enables key rotation with a configurable rotation period.
-  - **IAM Policies**: Manages IAM policies for key administrators, users, and service roles.
-  - **Grants Management**: Supports custom grants for the KMS key.
-  - **Tagging**: Allows tagging of the KMS key for better resource management.
+
+  - **KMS Key Creation**: Creates a KMS key with configurable description, usage type, and deletion window.
+  - **Alias Management**: Supports auto-generated or custom alias names for the KMS key.
+  - **Key Rotation**: Enables automatic key rotation with a configurable rotation period.
+  - **IAM Policies**: Manages IAM principals for key administrators, users, service roles, and service users.
+  - **Grants Management**: Supports custom KMS grants for fine-grained cryptographic operation delegation.
+  - **Custom Policy Statements**: Allows additional IAM key policy statements for advanced use cases.
+  - **Tagging**: Merges hierarchy tags (org, region, spoke, env) with local tags for consistent resource labeling.
+  - **AWS Provider 6.x**: Updated to support HashiCorp AWS provider `~> 6.35`.
 
   ## Inputs
-  - **prefix**: The prefix to use for the KMS key alias.
-  - **config**: A YAML configuration for the KMS key, including description, key usage, deletion window, aliases, administrators, service roles, users, grants, rotation settings, and statements.
+
+  | Variable   | Required | Description |
+  |------------|----------|-------------|
+  | `org`      | Yes      | Organization details (name, unit, environment name and type) — injected by Terragrunt hierarchy. |
+  | `spoke_def`| No       | 3-digit spoke identifier. Default: `"001"`. |
+  | `is_hub`   | No       | Hub/spoke topology flag. Default: `false`. |
+  | `prefix`   | No       | Alias path prefix. Default: `"kmskey"`. |
+  | `config`   | No       | KMS key configuration object (see usage). Default: `{}`. |
+  | `extra_tags`| No      | Additional tags merged into the resource — supplied by Terragrunt hierarchy. |
 
   ## Outputs
-  - **kms_key_id**: The ID of the created KMS key.
-  - **kms_key_arn**: The ARN of the created KMS key.
-  - **kms_key_aliases**: The aliases associated with the KMS key.
+
+  | Output             | Description |
+  |--------------------|-------------|
+  | `kms_key_id`       | Globally unique identifier of the KMS key. |
+  | `kms_key_arn`      | ARN of the KMS key. |
+  | `kms_key_aliases`  | List of aliases associated with the KMS key. |
 
 # Introduction to the project
 introduction: |-
   The AWS KMS Key Management Module is designed to simplify the creation and management of AWS KMS keys
-  through Terraform. It provides a structured approach to defining key policies, rotations, and access
-  controls using YAML configuration. This module is particularly useful for organizations requiring
-  standardized key management across different environments and applications.
+  through Terraform and Terragrunt. It wraps the upstream `terraform-aws-modules/kms/aws` module with a
+  structured, YAML-driven configuration pattern that fits the CloudOps Works spoke/hub deployment
+  hierarchy.
 
-  The module supports various KMS key configurations including custom aliases, key rotation policies,
-  and fine-grained access controls through IAM policies and grants.
+  The module auto-generates key aliases using the `system_name` convention
+  (`<org_unit>-<env_name>-<env_type>-<spoke>-<region>`), ensuring consistent naming across environments.
+  All IAM access controls are grouped under a `policy` sub-object, and key rotation settings are grouped
+  under a `rotation` sub-object, keeping the configuration readable and self-documenting.
+
+  This module supports AWS Provider 6.x and requires Terraform >= 1.3.
 
 # How to use this project
 usage: |-
-  To use this module in your Terragrunt configuration:
+  ### Bootstrap a new deployment with Terragrunt Scaffold
+
+  ```sh
+  # 1. Create and enter the target deployment directory
+  mkdir -p production/us-east-1/spoke001/kms
+  cd production/us-east-1/spoke001/kms
+
+  # 2. Scaffold the module (creates inputs.yaml, terragrunt.hcl, local-tags.json)
+  terragrunt scaffold github.com/cloudopsworks/terraform-module-aws-kms
+
+  # 3. Edit inputs.yaml with deployment-specific values
+  vi inputs.yaml
+
+  # 4. Apply
+  terragrunt apply
+  ```
+
+  ---
+
+  ### Generated `inputs.yaml`
+
+  After scaffolding, `inputs.yaml` contains all module-specific variables pre-populated with
+  comments. Edit the values to match your deployment:
+
+  ```yaml
+  # Module configuration — fill in values and uncomment required entries before running terragrunt apply.
+  # Variables supplied automatically by the Terragrunt hierarchy (org, is_hub, spoke_def, extra_tags)
+  # are NOT listed here; they are injected at runtime.
+
+  # prefix: ""  # (Optional) Prefix for the KMS key alias path. Default: "kmskey/<system_name>"
+  #             # Example: "myorg/devops" produces alias "myorg/devops/<system_name>"
+
+  # config:     # (Optional) KMS key configuration. Default: {}
+  #   description: "KMS key for <purpose>"     # (Optional) Human-readable key description
+  #   key_usage: ENCRYPT_DECRYPT               # (Optional) Valid: ENCRYPT_DECRYPT, SIGN_VERIFY, GENERATE_VERIFY_MAC
+  #   deletion_window: 30                      # (Optional) Days before deletion (7-30). Default: 30
+  #   aliases:                                 # (Optional) Custom alias names for the key
+  #     - "alias/my-app-key"
+  #   policy:                                  # (Optional) IAM principals granted access
+  #     administrators:                        # (Optional) ARNs of key administrators. Default: []
+  #       - "arn:aws:iam::123456789012:role/KeyAdminRole"
+  #     service_roles_for_autoscaling:         # (Optional) ARNs of autoscaling service roles. Default: []
+  #       - "arn:aws:iam::123456789012:role/AutoScalingRole"
+  #     users:                                 # (Optional) ARNs of key users. Default: []
+  #       - "arn:aws:iam::123456789012:role/AppRole"
+  #     service_users:                         # (Optional) ARNs of service users. Default: []
+  #       - "arn:aws:iam::123456789012:role/ServiceRole"
+  #   grants: {}                               # (Optional) Map of KMS grants. Default: {}
+  #   rotation:                                # (Optional) Automatic rotation settings
+  #     enabled: false                         # (Optional) Enable rotation. Default: false
+  #     period: 90                             # (Optional) Rotation period in days. Default: 90
+  #   statements: {}                           # (Optional) Additional IAM key policy statements. Default: {}
+  ```
+
+  ---
+
+  ### Generated `terragrunt.hcl`
+
+  Scaffold produces a `terragrunt.hcl` that wires `inputs.yaml` into the module inputs:
 
   ```hcl
+  locals {
+    local_vars  = yamldecode(file("./inputs.yaml"))
+    spoke_vars  = yamldecode(file(find_in_parent_folders("spoke-inputs.yaml")))
+    region_vars = yamldecode(file(find_in_parent_folders("region-inputs.yaml")))
+    env_vars    = yamldecode(file(find_in_parent_folders("env-inputs.yaml")))
+    global_vars = yamldecode(file(find_in_parent_folders("global-inputs.yaml")))
+
+    local_tags  = jsondecode(file("./local-tags.json"))
+    spoke_tags  = jsondecode(file(find_in_parent_folders("spoke-tags.json")))
+    region_tags = jsondecode(file(find_in_parent_folders("region-tags.json")))
+    env_tags    = jsondecode(file(find_in_parent_folders("env-tags.json")))
+    global_tags = jsondecode(file(find_in_parent_folders("global-tags.json")))
+
+    tags = merge(
+      local.global_tags,
+      local.env_tags,
+      local.region_tags,
+      local.spoke_tags,
+      local.local_tags
+    )
+  }
+
+  include "root" {
+    path = find_in_parent_folders("root.hcl")
+  }
+
   terraform {
-    source = "git::https://github.com/cloudopsworks/terraform-module-aws-kms.git?ref=v1.0.0"
+    source = "github.com/cloudopsworks/terraform-module-aws-kms?ref=v1.1.0"
   }
 
   inputs = {
-    prefix = "myorg/department-env-type-001-region"
-    config = {
-      description = "KMS key for application encryption"
-      key_usage = "ENCRYPT_DECRYPT"
-      deletion_window = 30
-      aliases = ["app1-key", "service-key"]
-      key_administrators = ["arn:aws:iam::123456789012:role/admin"]
-      key_users = ["arn:aws:iam::123456789012:role/app-role"]
-      rotation = {
-        enabled = true
-        period = 90
-      }
-    }
+    is_hub    = false
+    org       = local.env_vars.org
+    spoke_def = local.spoke_vars.spoke
+    prefix    = try(local.local_vars.prefix, "")
+    config    = try(local.local_vars.config, {})
+    extra_tags = local.tags
   }
   ```
 
 # Example usage
 examples: |-
-  1. Basic encryption key with rotation:
+  #### 1. Basic encryption key with auto-rotation
+
   ```yaml
+  # inputs.yaml
   prefix: "myorg/app"
   config:
     description: "Application encryption key"
+    key_usage: ENCRYPT_DECRYPT
+    rotation:
+      enabled: true
+      period: 365
+  ```
+
+  #### 2. Signing key with administrators and custom aliases
+
+  ```yaml
+  # inputs.yaml
+  prefix: "myorg/signing"
+  config:
+    description: "Document signing key"
+    key_usage: SIGN_VERIFY
+    aliases:
+      - "alias/doc-signing-key"
+    policy:
+      administrators:
+        - "arn:aws:iam::123456789012:role/KeyAdminRole"
+      users:
+        - "arn:aws:iam::123456789012:role/SigningServiceRole"
+  ```
+
+  #### 3. Shared services key with autoscaling support
+
+  ```yaml
+  # inputs.yaml
+  prefix: "myorg/shared"
+  config:
+    description: "Shared services encryption key"
+    deletion_window: 14
+    aliases:
+      - "alias/shared-key"
+      - "alias/common-key"
+    policy:
+      administrators:
+        - "arn:aws:iam::123456789012:role/KeyAdminRole"
+      service_roles_for_autoscaling:
+        - "arn:aws:iam::123456789012:role/AutoScalingServiceRole"
+      users:
+        - "arn:aws:iam::123456789012:role/service-a"
+        - "arn:aws:iam::123456789012:role/service-b"
     rotation:
       enabled: true
   ```
 
-  2. Multi-service key with custom permissions:
-  ```yaml
-  prefix: "myorg/shared"
-  config:
-    description: "Shared services encryption key"
-    aliases: ["shared-key", "common-key"]
-    key_administrators: ["arn:aws:iam::123456789012:role/key-admin"]
-    key_service_users: [
-      "arn:aws:iam::123456789012:role/service-a",
-      "arn:aws:iam::123456789012:role/service-b"
-    ]
-  ```
-
 # How to get started quickly
 quickstart: |-
-  1. Add this module to your Terragrunt configuration:
-     ```hcl
-     terraform {
-       source = "git::https://github.com/cloudopsworks/terraform-module-aws-kms.git?ref=v1.0.0"
-     }
+  1. Create and enter the target deployment directory:
+     ```bash
+     mkdir -p production/us-east-1/spoke001/kms
+     cd production/us-east-1/spoke001/kms
      ```
 
-  2. Create a minimal configuration:
-     ```hcl
-     inputs = {
-       prefix = "myorg/myapp"
-       config = {
-         description = "My first KMS key"
-         key_usage = "ENCRYPT_DECRYPT"
-       }
-     }
+  2. Scaffold the module:
+     ```bash
+     terragrunt scaffold github.com/cloudopsworks/terraform-module-aws-kms
      ```
 
-  3. Initialize and apply:
+  3. Open `inputs.yaml` and configure at minimum a `prefix`:
+     ```yaml
+     prefix: "myorg/myapp"
+     config:
+       description: "My first KMS key"
+       rotation:
+         enabled: true
+     ```
+
+  4. Initialize and apply:
      ```bash
      terragrunt init
      terragrunt plan

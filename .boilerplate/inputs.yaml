@@ -1,18 +1,29 @@
-# Module configuration
-# Required variables
-{{- range .requiredVariables }}
-{{- if ne .Name "org"}}
-# Description {{ .Description }} , Type: {{ .Type }}
-{{ .Name }}: {{ .DefaultValuePlaceholder }}
-{{- end }}
+# Module configuration — fill in values and uncomment required entries before running terragrunt apply.
+# Variables supplied automatically by the Terragrunt hierarchy (org, is_hub, spoke_def, extra_tags)
+# are NOT listed here; they are injected at runtime.
 
-{{- end }}
-# Optional variables
-{{- range .optionalVariables }}
-{{- if ne .Name "is_hub" "spoke_def" "extra_args" }}
-# Description {{ .Description }} , Type: {{ .Type }}
-#{{ .Name }}: {{ .DefaultValue }}
-{{- end }}
+# prefix: ""  # (Optional) Prefix for the KMS key alias path. Default: "kmskey/<system_name>"
+#             # Example: "myorg/devops" produces alias "myorg/devops/<system_name>"
 
-{{- end }}
-
+# config:     # (Optional) KMS key configuration. Default: {}
+#   description: "KMS key for <purpose>"     # (Optional) Human-readable key description. Default: "KMS key - <system_name>"
+#   key_usage: ENCRYPT_DECRYPT               # (Optional) Intended use of the key.
+#                                            #   Valid values: ENCRYPT_DECRYPT, SIGN_VERIFY, GENERATE_VERIFY_MAC
+#                                            #   Default: ENCRYPT_DECRYPT
+#   deletion_window: 30                      # (Optional) Days to wait before deleting the key after scheduled deletion (7-30). Default: 30
+#   aliases:                                 # (Optional) Custom alias names for the key. Default: one alias from prefix + system_name
+#     - "alias/my-app-key"
+#   policy:                                  # (Optional) IAM principals granted access to the key
+#     administrators:                        # (Optional) ARNs of IAM principals that can administer the key. Default: []
+#       - "arn:aws:iam::123456789012:role/KeyAdminRole"
+#     service_roles_for_autoscaling:         # (Optional) ARNs of IAM roles used by autoscaling services. Default: []
+#       - "arn:aws:iam::123456789012:role/AutoScalingRole"
+#     users:                                 # (Optional) ARNs of IAM principals that can use the key for cryptographic operations. Default: []
+#       - "arn:aws:iam::123456789012:role/AppRole"
+#     service_users:                         # (Optional) ARNs of IAM service principals that can use the key. Default: []
+#       - "arn:aws:iam::123456789012:role/ServiceRole"
+#   grants: {}                               # (Optional) Map of key grants (see AWS KMS Grants docs). Default: {}
+#   rotation:                                # (Optional) Automatic key rotation settings
+#     enabled: false                         # (Optional) Enable automatic key rotation. Default: false
+#     period: 90                             # (Optional) Rotation period in days (valid range depends on key spec). Default: 90
+#   statements: {}                           # (Optional) Additional custom IAM key policy statements. Default: {}
