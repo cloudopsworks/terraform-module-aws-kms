@@ -28,12 +28,29 @@ description: |-
 
   - **KMS Key Creation**: Creates a KMS key with configurable description, usage type, and deletion window.
   - **Alias Management**: Supports auto-generated or custom alias names for the KMS key.
-  - **Key Rotation**: Enables automatic key rotation with a configurable rotation period.
+  - **Key Rotation (on by default)**: Automatic key rotation is enabled out of the box with a
+    configurable rotation period, so keys are compliant with AWS Security Hub CSPM from the first apply.
   - **IAM Policies**: Manages IAM principals for key administrators, users, service roles, and service users.
   - **Grants Management**: Supports custom KMS grants for fine-grained cryptographic operation delegation.
   - **Custom Policy Statements**: Allows additional IAM key policy statements for advanced use cases.
   - **Tagging**: Merges hierarchy tags (org, region, spoke, env) with local tags for consistent resource labeling.
-  - **AWS Provider 6.x**: Updated to support HashiCorp AWS provider `~> 6.35`.
+  - **AWS Provider 6.x**: Updated to support HashiCorp AWS provider `~> 6.35`, on upstream
+    `terraform-aws-modules/kms/aws ~> 4.2`.
+
+  ## Compliance: key rotation
+
+  `config.rotation.enabled` defaults to **`true`**. This is deliberate — AWS Security Hub CSPM
+  control **KMS.4** (*AWS KMS keys should be rotated*, from the CIS AWS Foundations Benchmark
+  checks 3.6 / 3.8) requires automatic rotation on customer managed keys.
+
+  > **Setting `config.rotation.enabled: false` will render the key NON-COMPLIANT** against that
+  > control and the finding will surface in Security Hub. Only disable rotation when you have a
+  > documented exception — for example a key with imported key material or an asymmetric key
+  > spec, neither of which supports automatic rotation.
+
+  Existing deployments that never set `config.rotation.enabled` will see rotation turned on in
+  the next plan. That is the intended upgrade behaviour; set it explicitly to `false` if you
+  need to hold the previous state.
 
   ## Inputs
 
@@ -64,7 +81,9 @@ introduction: |-
   The module auto-generates key aliases using the `system_name` convention
   (`<org_unit>-<env_name>-<env_type>-<spoke>-<region>`), ensuring consistent naming across environments.
   All IAM access controls are grouped under a `policy` sub-object, and key rotation settings are grouped
-  under a `rotation` sub-object, keeping the configuration readable and self-documenting.
+  under a `rotation` sub-object, keeping the configuration readable and self-documenting. Rotation is
+  enabled by default so that every key the module creates satisfies AWS Security Hub CSPM control KMS.4
+  without extra configuration.
 
   This module supports AWS Provider 6.x and requires Terraform >= 1.3.
 
@@ -118,10 +137,13 @@ usage: |-
   #     service_users:                         # (Optional) ARNs of service users. Default: []
   #       - "arn:aws:iam::123456789012:role/ServiceRole"
   #   grants: {}                               # (Optional) Map of KMS grants. Default: {}
-  #   rotation:                                # (Optional) Automatic rotation settings
-  #     enabled: false                         # (Optional) Enable rotation. Default: false
-  #     period: 90                             # (Optional) Rotation period in days. Default: 90
-  #   statements: {}                           # (Optional) Additional IAM key policy statements. Default: {}
+  #   rotation:                                # (Optional) Automatic key rotation settings
+  #     enabled: true                          # (Optional) Enable automatic key rotation. Default: true
+  #                                            #   Required by AWS Security Hub CSPM control KMS.4
+  #                                            #   (CIS AWS Foundations 3.6 / 3.8). Setting this to false
+  #                                            #   renders the key NON-COMPLIANT — use a documented exception.
+  #     period: 90                             # (Optional) Rotation period in days (90-2560). Default: 90
+  #   statements: []                           # (Optional) Additional IAM key policy statements. Default: []
   ```
 
   ---
@@ -158,7 +180,7 @@ usage: |-
   }
 
   terraform {
-    source = "github.com/cloudopsworks/terraform-module-aws-kms?ref=v1.1.0"
+    source = "github.com/cloudopsworks/terraform-module-aws-kms?ref=v2.1.0"
   }
 
   inputs = {
@@ -173,7 +195,10 @@ usage: |-
 
 # Example usage
 examples: |-
-  #### 1. Basic encryption key with auto-rotation
+  #### 1. Basic encryption key (rotation on by default)
+
+  Rotation needs no configuration — `config.rotation.enabled` already defaults to `true`. Set
+  `period` only when you want something other than the 90-day default.
 
   ```yaml
   # inputs.yaml
@@ -182,7 +207,6 @@ examples: |-
     description: "Application encryption key"
     key_usage: ENCRYPT_DECRYPT
     rotation:
-      enabled: true
       period: 365
   ```
 
@@ -222,8 +246,21 @@ examples: |-
       users:
         - "arn:aws:iam::123456789012:role/service-a"
         - "arn:aws:iam::123456789012:role/service-b"
+  ```
+
+  #### 4. Opting out of rotation (non-compliant — requires an exception)
+
+  Only use this when the key genuinely cannot be rotated, such as one created from imported key
+  material. The resulting key will be reported as **NON-COMPLIANT** by AWS Security Hub CSPM
+  control KMS.4.
+
+  ```yaml
+  # inputs.yaml
+  prefix: "myorg/imported"
+  config:
+    description: "Key with imported material - rotation not supported"
     rotation:
-      enabled: true
+      enabled: false   # NON-COMPLIANT with Security Hub CSPM KMS.4 - documented exception required
   ```
 
 # How to get started quickly
@@ -239,13 +276,12 @@ quickstart: |-
      terragrunt scaffold github.com/cloudopsworks/terraform-module-aws-kms
      ```
 
-  3. Open `inputs.yaml` and configure at minimum a `prefix`:
+  3. Open `inputs.yaml` and configure at minimum a `prefix`. Key rotation is already enabled by
+     default, so nothing extra is needed to satisfy AWS Security Hub CSPM control KMS.4:
      ```yaml
      prefix: "myorg/myapp"
      config:
        description: "My first KMS key"
-       rotation:
-         enabled: true
      ```
 
   4. Initialize and apply:
