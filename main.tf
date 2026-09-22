@@ -12,9 +12,8 @@ locals {
 }
 
 module "this" {
-  source  = "terraform-aws-modules/kms/aws"
-  version = "3.1.1"
-
+  source                            = "terraform-aws-modules/kms/aws"
+  version                           = "~> 4.2"
   description                       = try(var.config.description, "KMS key - ${local.system_name}")
   key_usage                         = try(var.config.key_usage, "ENCRYPT_DECRYPT")
   deletion_window_in_days           = try(var.config.deletion_window, 30)
@@ -24,9 +23,9 @@ module "this" {
   key_users                         = try(var.config.policy.users, [])
   key_service_users                 = try(var.config.policy.service_users, [])
   grants                            = try(var.config.grants, {})
-  enable_key_rotation               = try(var.config.rotation.enabled, false)
+  enable_key_rotation               = try(var.config.rotation.enabled, true)
   rotation_period_in_days           = try(var.config.rotation.period, 90)
-  key_statements                    = try(var.config.statements, {})
+  key_statements                    = try(var.config.statements, [])
   tags                              = local.all_tags
 }
 

@@ -32,11 +32,15 @@ variable "prefix" {
 #       - "arn:aws:iam::123456789012:role/service"
 #   grants: {}                                       # (Optional) Map of grants for the key. Default: {}
 #   rotation:                                        # (Optional) Key rotation settings
-#     enabled: false                                 # (Optional) Enable automatic key rotation. Default: false
-#     period: 90                                     # (Optional) Rotation period in days. Default: 90
-#   statements: {}                                   # (Optional) Additional IAM key policy statements. Default: {}
+#     enabled: true                                  # (Optional) Enable automatic key rotation. Default: true
+#                                                    #   Rotation is enabled by default because AWS Security Hub CSPM
+#                                                    #   requires it (control KMS.4, CIS AWS Foundations 3.6 / 3.8).
+#                                                    #   Setting this to false renders the key NON-COMPLIANT with those
+#                                                    #   controls — only disable it with a documented exception.
+#     period: 90                                     # (Optional) Rotation period in days (90-2560). Default: 90
+#   statements: []                                   # (Optional) Additional IAM key policy statements. Default: []
 variable "config" {
-  description = "The configuration for the KMS key, including description, key_usage, deletion_window, aliases, policy (administrators, service_roles_for_autoscaling, users, service_users), grants, rotation, and statements"
+  description = "The configuration for the KMS key, including description, key_usage, deletion_window, aliases, policy (administrators, service_roles_for_autoscaling, users, service_users), grants, rotation (enabled by default for Security Hub CSPM compliance), and statements"
   type        = any
   default     = {}
 }

@@ -24,12 +24,29 @@ KMS keys with configurable policies, rotation, aliases, and IAM access controls.
 
 - **KMS Key Creation**: Creates a KMS key with configurable description, usage type, and deletion window.
 - **Alias Management**: Supports auto-generated or custom alias names for the KMS key.
-- **Key Rotation**: Enables automatic key rotation with a configurable rotation period.
+- **Key Rotation (on by default)**: Automatic key rotation is enabled out of the box with a
+  configurable rotation period, so keys are compliant with AWS Security Hub CSPM from the first apply.
 - **IAM Policies**: Manages IAM principals for key administrators, users, service roles, and service users.
 - **Grants Management**: Supports custom KMS grants for fine-grained cryptographic operation delegation.
 - **Custom Policy Statements**: Allows additional IAM key policy statements for advanced use cases.
 - **Tagging**: Merges hierarchy tags (org, region, spoke, env) with local tags for consistent resource labeling.
-- **AWS Provider 6.x**: Updated to support HashiCorp AWS provider `~> 6.35`.
+- **AWS Provider 6.x**: Updated to support HashiCorp AWS provider `~> 6.35`, on upstream
+  `terraform-aws-modules/kms/aws ~> 4.2`.
+
+## Compliance: key rotation
+
+`config.rotation.enabled` defaults to **`true`**. This is deliberate — AWS Security Hub CSPM
+control **KMS.4** (*AWS KMS keys should be rotated*, from the CIS AWS Foundations Benchmark
+checks 3.6 / 3.8) requires automatic rotation on customer managed keys.
+
+> **Setting `config.rotation.enabled: false` will render the key NON-COMPLIANT** against that
+> control and the finding will surface in Security Hub. Only disable rotation when you have a
+> documented exception — for example a key with imported key material or an asymmetric key
+> spec, neither of which supports automatic rotation.
+
+Existing deployments that never set `config.rotation.enabled` will see rotation turned on in
+the next plan. That is the intended upgrade behaviour; set it explicitly to `false` if you
+need to hold the previous state.
 
 ## Inputs
 
@@ -86,7 +103,9 @@ hierarchy.
 The module auto-generates key aliases using the `system_name` convention
 (`<org_unit>-<env_name>-<env_type>-<spoke>-<region>`), ensuring consistent naming across environments.
 All IAM access controls are grouped under a `policy` sub-object, and key rotation settings are grouped
-under a `rotation` sub-object, keeping the configuration readable and self-documenting.
+under a `rotation` sub-object, keeping the configuration readable and self-documenting. Rotation is
+enabled by default so that every key the module creates satisfies AWS Security Hub CSPM control KMS.4
+without extra configuration.
 
 This module supports AWS Provider 6.x and requires Terraform >= 1.3.
 
@@ -145,10 +164,13 @@ comments. Edit the values to match your deployment:
 #     service_users:                         # (Optional) ARNs of service users. Default: []
 #       - "arn:aws:iam::123456789012:role/ServiceRole"
 #   grants: {}                               # (Optional) Map of KMS grants. Default: {}
-#   rotation:                                # (Optional) Automatic rotation settings
-#     enabled: false                         # (Optional) Enable rotation. Default: false
-#     period: 90                             # (Optional) Rotation period in days. Default: 90
-#   statements: {}                           # (Optional) Additional IAM key policy statements. Default: {}
+#   rotation:                                # (Optional) Automatic key rotation settings
+#     enabled: true                          # (Optional) Enable automatic key rotation. Default: true
+#                                            #   Required by AWS Security Hub CSPM control KMS.4
+#                                            #   (CIS AWS Foundations 3.6 / 3.8). Setting this to false
+#                                            #   renders the key NON-COMPLIANT — use a documented exception.
+#     period: 90                             # (Optional) Rotation period in days (90-2560). Default: 90
+#   statements: []                           # (Optional) Additional IAM key policy statements. Default: []
 ```
 
 ---
@@ -185,7 +207,7 @@ include "root" {
 }
 
 terraform {
-  source = "github.com/cloudopsworks/terraform-module-aws-kms?ref=v1.1.0"
+  source = "github.com/cloudopsworks/terraform-module-aws-kms?ref=v2.1.0"
 }
 
 inputs = {
@@ -211,13 +233,12 @@ inputs = {
    terragrunt scaffold github.com/cloudopsworks/terraform-module-aws-kms
    ```
 
-3. Open `inputs.yaml` and configure at minimum a `prefix`:
+3. Open `inputs.yaml` and configure at minimum a `prefix`. Key rotation is already enabled by
+   default, so nothing extra is needed to satisfy AWS Security Hub CSPM control KMS.4:
    ```yaml
    prefix: "myorg/myapp"
    config:
      description: "My first KMS key"
-     rotation:
-       enabled: true
    ```
 
 4. Initialize and apply:
@@ -230,7 +251,10 @@ inputs = {
 
 ## Examples
 
-#### 1. Basic encryption key with auto-rotation
+#### 1. Basic encryption key (rotation on by default)
+
+Rotation needs no configuration — `config.rotation.enabled` already defaults to `true`. Set
+`period` only when you want something other than the 90-day default.
 
 ```yaml
 # inputs.yaml
@@ -239,7 +263,6 @@ config:
   description: "Application encryption key"
   key_usage: ENCRYPT_DECRYPT
   rotation:
-    enabled: true
     period: 365
 ```
 
@@ -279,8 +302,21 @@ config:
     users:
       - "arn:aws:iam::123456789012:role/service-a"
       - "arn:aws:iam::123456789012:role/service-b"
+```
+
+#### 4. Opting out of rotation (non-compliant — requires an exception)
+
+Only use this when the key genuinely cannot be rotated, such as one created from imported key
+material. The resulting key will be reported as **NON-COMPLIANT** by AWS Security Hub CSPM
+control KMS.4.
+
+```yaml
+# inputs.yaml
+prefix: "myorg/imported"
+config:
+  description: "Key with imported material - rotation not supported"
   rotation:
-    enabled: true
+    enabled: false   # NON-COMPLIANT with Security Hub CSPM KMS.4 - documented exception required
 ```
 
 
@@ -300,34 +336,34 @@ Available targets:
 ## Requirements
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.3 |
 | <a name="requirement_aws"></a> [aws](#requirement\_aws) | ~> 6.35 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 6.35 |
+| ---- | ------- |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | 6.41.0 |
 
 ## Modules
 
 | Name | Source | Version |
-|------|--------|---------|
-| <a name="module_tags"></a> [tags](#module\_tags) | cloudopsworks/tags/local | 1.0.9 |
-| <a name="module_this"></a> [this](#module\_this) | terraform-aws-modules/kms/aws | 3.1.1 |
+| ---- | ------ | ------- |
+| <a name="module_tags"></a> [tags](#module\_tags) | cloudopsworks/tags/local | 1.0.10 |
+| <a name="module_this"></a> [this](#module\_this) | terraform-aws-modules/kms/aws | ~> 4.2 |
 
 ## Resources
 
 | Name | Type |
-|------|------|
+| ---- | ---- |
 | [aws_region.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/region) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| <a name="input_config"></a> [config](#input\_config) | The configuration for the KMS key, including description, key\_usage, deletion\_window, aliases, policy (administrators, service\_roles\_for\_autoscaling, users, service\_users), grants, rotation, and statements | `any` | `{}` | no |
+| ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_config"></a> [config](#input\_config) | The configuration for the KMS key, including description, key\_usage, deletion\_window, aliases, policy (administrators, service\_roles\_for\_autoscaling, users, service\_users), grants, rotation (enabled by default for Security Hub CSPM compliance), and statements | `any` | `{}` | no |
 | <a name="input_extra_tags"></a> [extra\_tags](#input\_extra\_tags) | Extra tags to add to the resources | `map(string)` | `{}` | no |
 | <a name="input_is_hub"></a> [is\_hub](#input\_is\_hub) | Is this a hub or spoke configuration? | `bool` | `false` | no |
 | <a name="input_org"></a> [org](#input\_org) | Organization details | <pre>object({<br/>    organization_name = string<br/>    organization_unit = string<br/>    environment_type  = string<br/>    environment_name  = string<br/>  })</pre> | n/a | yes |
@@ -337,7 +373,7 @@ Available targets:
 ## Outputs
 
 | Name | Description |
-|------|-------------|
+| ---- | ----------- |
 | <a name="output_kms_key_aliases"></a> [kms\_key\_aliases](#output\_kms\_key\_aliases) | The aliases associated with the KMS key |
 | <a name="output_kms_key_arn"></a> [kms\_key\_arn](#output\_kms\_key\_arn) | The Amazon Resource Name (ARN) of the KMS key |
 | <a name="output_kms_key_id"></a> [kms\_key\_id](#output\_kms\_key\_id) | The globally unique identifier for the KMS key |
