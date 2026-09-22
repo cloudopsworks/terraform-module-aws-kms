@@ -13,7 +13,7 @@ locals {
 
 module "this" {
   source  = "terraform-aws-modules/kms/aws"
-  version = "3.1.1"
+  version = "~> 4.2"
 
   description                       = try(var.config.description, "KMS key - ${local.system_name}")
   key_usage                         = try(var.config.key_usage, "ENCRYPT_DECRYPT")
